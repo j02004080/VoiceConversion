@@ -10,13 +10,26 @@ import sys
 def loadData(path):
     Data = {}
     for speaker in os.listdir(path):
-        spath = path+speaker+'/'
+        spath = path + speaker + '/'
         filename = os.listdir(spath)
-        mat = sio.loadmat(spath+filename[0])
-        Data[speaker] = mat['sp']
-        for name in filename[1:len(filename)]:     
-                mat = sio.loadmat(spath+name)
-                Data[speaker] = np.concatenate((Data[speaker], mat['sp']), axis = 0)
+        Data[speaker] = []
+        for name in filename:
+            tfrecords_filename = path + speaker + '/' + name
+            record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
+            for string_record in record_iterator:
+                example = tf.train.Example()
+                example.ParseFromString(string_record)
+                spec_string = example.features.feature['spec'].bytes_list.value[0]
+                spec = np.fromstring(spec_string, dtype=np.float64)
+                length = int(example.features.feature['len'].int64_list.value[0])
+                spec = spec.reshape([length, 513])
+                ap_string = example.features.feature['ap'].bytes_list.value[0]
+                ap = np.fromstring(ap_string, dtype=np.float64)
+                Nf_string = example.features.feature['Nfactor'].bytes_list.value[0]
+                Nfactor = np.fromstring(Nf_string, dtype=np.float64)
+                f0_string = example.features.feature['f0'].bytes_list.value[0]
+                f0 = np.fromstring(f0_string, dtype=np.float64)
+                print(f0)
     return Data
 
 def pickTransferInput(path, src, trg):
@@ -24,37 +37,55 @@ def pickTransferInput(path, src, trg):
     srcfile = os.listdir(srcPath)
     speaker = os.listdir(path)
     ind = random.randint(0, len(srcfile)-1)
-    smat = sio.loadmat(srcPath+srcfile[ind])
-    srcData = np.reshape(smat['sp'], [-1, 513, 1, 1])
+    tfrecords_filename = path + src + '/' + srcfile[ind]
+    record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
+    for string_record in record_iterator:
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        spec_string = example.features.feature['spec'].bytes_list.value[0]
+        spec = np.fromstring(spec_string, dtype=np.float64)
+        length = int(example.features.feature['len'].int64_list.value[0])
+        srcData = spec.reshape([length, 513])
     y = [speaker.index(trg)]
     return srcData, y, srcfile[ind]
 
-def nextbatch(dat, mini_batch):
-    
-    source = random.choice(list(dat.keys()))
-    y = [list(dat.keys()).index(source)]
-    ind = random.randint(0, len(dat[source])-128)
-    src = np.transpose(dat[source][ind:ind+128])
-
-
-    target = random.choice(list(dat.keys()))
-    y = [list(dat.keys()).index(target)]
-    ind = random.randint(0, len(dat[target])-128)
-    trg = np.transpose(dat[target][ind:ind+128])
-
-    
-    return src, y, trg
+def nextbatch(path, batchSize):
+    speakerList = os.listdir(path)
+    speaker = random.choice(speakerList)
+    spath = path + speaker + '/'
+    filename = os.listdir(spath)
+    filename = random.choice(filename)
+    tfrecords_filename = path + speaker + '/' + filename
+    record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
+    for string_record in record_iterator:
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        spec_string = example.features.feature['spec'].bytes_list.value[0]
+        spec = np.fromstring(spec_string, dtype=np.float64)
+        length = int(example.features.feature['len'].int64_list.value[0])
+        spec = spec.reshape([length, 513])
+    ind = random.randint(0, len(spec)-batchSize)
+    src = spec[ind:ind+batchSize]
+    y = [speakerList.index(speaker)]
+    return src, y
   
 def sythesis(path, src, trg, sp, filename):
-    file = path+src+'/' + filename
-    mat = sio.loadmat(file)
-    ap = mat['ap']
-    ap = ap.copy(order='C')
-    Nfactor = mat['Nfactor']
+    spath = path + src + '/'
+    tfrecords_filename = spath + filename
+    record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
+    for string_record in record_iterator:
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        ap_string = example.features.feature['ap'].bytes_list.value[0]
+        ap = np.fromstring(ap_string, dtype=np.float64)
+        length = int(example.features.feature['len'].int64_list.value[0])
+        ap = ap.reshape([length, 513])
+        Nf_string = example.features.feature['Nfactor'].bytes_list.value[0]
+        Nfactor = np.fromstring(Nf_string, dtype=np.float64)
+
     sp = np.multiply(sp, np.transpose(np.tile(Nfactor, (513, 1))))
     fs = 16000
     f0_c = convert_f0(path, src, trg, filename)
-    # f0_c = f0_c.copy(order='C')
     y = pw.synthesize(f0_c, sp, ap, fs)
     opname = src + '_To_' + trg + '_' + filename[0:len(filename)-4] + '.wav'
     sio.savemat(opname, mdict={'y': y})
@@ -62,12 +93,25 @@ def sythesis(path, src, trg, sp, filename):
     
 
 def convert_f0(path, src, trg, filename):
-    srcfile = path+src+'/' + filename
-    trgfile = path+trg+'/' + filename
-    smat = sio.loadmat(srcfile)
-    tmat = sio.loadmat(trgfile)
-    f0_s = smat['f0']
-    f0_t = tmat['f0']
+    srcfile = path + src + '/' + filename
+    trgfile = path + trg + '/' + filename
+
+    record_iterator = tf.python_io.tf_record_iterator(path=srcfile)
+    for string_record in record_iterator:
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        f0_string = example.features.feature['f0'].bytes_list.value[0]
+        f0_s = np.fromstring(f0_string, dtype=np.float64)
+
+    record_iterator = tf.python_io.tf_record_iterator(path=trgfile)
+    for string_record in record_iterator:
+        example = tf.train.Example()
+        example.ParseFromString(string_record)
+        f0_string = example.features.feature['f0'].bytes_list.value[0]
+        f0_t = np.fromstring(f0_string, dtype=np.float64)
+
+    f0_s = f0_s
+    f0_t = f0_t
     mu_s = np.log(np.mean(f0_s[f0_s>1]))
     mu_t = np.log(np.mean(f0_t[f0_t>1]))
     std_s = np.log(np.std(f0_s[f0_s>1]))

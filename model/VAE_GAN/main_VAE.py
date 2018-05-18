@@ -6,8 +6,8 @@ from function.analysis import (loadData, pickTransferInput, sythesis, nextbatch)
 from function.ConvVAE import ConvVAE
 
 
-TrainDataPath = '../../vcc2016/mat_norm//Train/'
-TestDataPath = '../../vcc2016/mat_norm//Test/'
+TrainDataPath = '../../vcc2016/TFrecords//spec_norm//Train/'
+TestDataPath = '../../vcc2016/TFrecords//spec_norm//Test/'
 
 dataSize = 513
 latentSize = 64
@@ -15,11 +15,11 @@ speakerN = 10
 lam = 0
 
 # Load data
-tS = time.time()
-trainData = loadData(TrainDataPath)
-testData = loadData(TestDataPath)
-tE = time.time()
-print("loading data time: %f" % (tE-tS))
+# tS = time.time()
+# trainData = loadData(TrainDataPath)
+# testData = loadData(TestDataPath)
+# tE = time.time()
+# print("loading data time: %f" % (tE-tS))
 
 arch = {
         'z_dim': 256,
@@ -52,21 +52,21 @@ recon_x = x_mu + tf.multiply(std_var, epsilon)
 
 batchSize = 128
 
-logp = -0.5*tf.reduce_mean(tf.log(math.pi) + x_var + tf.divide(tf.pow((source-x_mu), 2), tf.exp(x_var)))
+logp = 0.5*tf.reduce_mean(tf.log(math.pi) + x_var + tf.divide(tf.pow((recon_x-x_mu), 2), tf.exp(x_var)))
 KL = -0.5*tf.reduce_mean((1 + z_var - tf.square(z_mean) - tf.exp(z_var)), 1)
 loss = tf.reduce_mean(KL+logp)
-train_step = tf.train.AdamOptimizer(0.000001).minimize(loss)
+train_step = tf.train.AdamOptimizer(0.0001).minimize(loss)
 
 sess = tf.InteractiveSession()
 tf.global_variables_initializer().run()
 
 for i in range(20):
         for j in range(2000):
-                x_batch, y_batch, _ = nextbatch(trainData, batchSize)
+                x_batch, y_batch = nextbatch(TrainDataPath, batchSize)
                 train_step.run(feed_dict = {source: x_batch , y: y_batch})
-                x_batch, y_batch, _ = nextbatch(testData, batchSize)
+                x_batch, y_batch = nextbatch(TestDataPath, batchSize)
                 train_step.run(feed_dict={source: x_batch, y: y_batch})
-        x_Evabatch, y_Evabatch, _ = nextbatch(testData, batchSize)
+        x_Evabatch, y_Evabatch = nextbatch(TestDataPath, batchSize)
         eva_logp, kl= sess.run([logp , KL], feed_dict={source: x_Evabatch, y: y_Evabatch})
         print('epoch %d' %(i))
         print('train log-probability: %f' %(np.mean(eva_logp)))

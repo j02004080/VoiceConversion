@@ -5,7 +5,7 @@ import random
 import pyworld as pw
 
 
-def loadData(path):
+def loadData(path, L, tstep):
     Data = {}
     for speaker in os.listdir(path):
         spath = path+speaker+'/'
@@ -13,26 +13,28 @@ def loadData(path):
         mat = sio.loadmat(spath + filename[0])
         mat = mat['value']
         Nmat = (mat - np.mean(mat)) / np.var(mat)
-        tmp = np.reshape(mat[0:8000 * (mat.shape[0] // 8000)], [-1, 8000])
-        Ntmp = np.reshape(Nmat[0:8000 * (Nmat.shape[0] // 8000)], [-1, 8000])
+        length = L*tstep
+        tmp = np.reshape(mat[0: length* (mat.shape[0] // length)], [-1, length])
+        Ntmp = np.reshape(Nmat[0:length * (Nmat.shape[0] // length)], [-1, length])
         Data[speaker] = [tmp, Ntmp]
         for name in filename[1:len(filename)]:
                 mat = sio.loadmat(spath+name)
                 mat = mat['value']
                 Nmat = (mat-np.mean(mat))/np.var(mat)
-                tmp = np.reshape(mat[0:8000 * (mat.shape[0] // 8000)], [-1, 8000])
-                Ntmp = np.reshape(Nmat[0:8000 * (Nmat.shape[0] // 8000)], [-1, 8000])
+                tmp = np.reshape(mat[0:length * (mat.shape[0] // length)], [-1, length])
+                Ntmp = np.reshape(Nmat[0:length * (Nmat.shape[0] // length)], [-1, length])
                 Data[speaker] = [np.concatenate((Data[speaker][0], tmp), axis=0), np.concatenate((Data[speaker][1], Ntmp), axis=0)]
     return Data
 
 
-def pickTransferInput(path, src):
+def pickTransferInput(path, src, L, tstep):
     srcPath = path+src+'/'
     srcfile = os.listdir(srcPath)
     ind = random.randint(0, len(srcfile)-1)
     smat = sio.loadmat(srcPath+srcfile[ind])
     smat = smat['value']
-    tmp = np.reshape(smat[0:8000 * (smat.shape[0] // 8000)], [-1, 8000])
+    length = L*tstep
+    tmp = np.reshape(smat[0:length * (smat.shape[0] // length)], [-1, length])
     return tmp, srcfile[ind][0:len(srcfile[ind])-4]
 
 def nextbatch(data, src, batch):
@@ -40,20 +42,6 @@ def nextbatch(data, src, batch):
     srcData = data[src]
     ind = random.randint(0, len(srcData[0]) - batch)
     return srcData[1][ind: ind+batch], srcData[0][ind: ind+batch]
-
-# def nextbatch(path, src, trg):
-#     srcPath = path + src + '/'
-#     trgPath = path + trg + '/'
-#     srcfile = os.listdir(srcPath)
-#     trgfile = os.listdir(trgPath)
-#     ind = random.randint(0, len(srcfile) - 1)
-#     smat = sio.loadmat(srcPath + srcfile[ind])
-#     tmat = sio.loadmat(trgPath + trgfile[ind])
-#     sind = random.randint(0, smat['sp'].shape[0] - 128)
-#     tind = random.randint(0, tmat['sp'].shape[0] - 128)
-#     srcData = np.reshape(np.transpose(smat['sp'][sind:sind+128]), [1, 513, 128, 1])
-#     trgData = np.reshape(np.transpose(tmat['sp'][tind:tind+128]), [1, 513, 128, 1])
-#     return srcData, trgData
   
 def sythesis(path, src, trg, sp, filename):
     file = path+src+'/' + filename

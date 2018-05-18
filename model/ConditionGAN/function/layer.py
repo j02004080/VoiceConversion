@@ -25,17 +25,6 @@ def deconv2d(x, c, k, s, activation, name):
         x = tf.contrib.layers.layer_norm(x)
         return activation(x, name)
 
-def gateCNN(input, shape, name):
-    with tf.variable_scope(name):
-        U = tf.get_variable('U', shape=shape, initializer=tf.random_normal_initializer(stddev=0.1))
-        b_U = tf.get_variable('b_U', shape=shape[1], initializer=tf.constant_initializer(0.01))
-        V = tf.get_variable('V', shape=shape, initializer=tf.random_normal_initializer(stddev=0.1))
-        b_V = tf.get_variable('b_V', shape=shape[1], initializer=tf.constant_initializer(0.01))
-        x = tf.nn.relu(tf.matmul(input, U) + b_U)
-        w = tf.sigmoid(tf.matmul(input, V) + b_V)
-        output = tf.multiply(x, w)
-        return output
-
 def IN_conv(x):
     Xtihw = tf.transpose(x, [0, 3, 1, 2])
     mu = tf.reduce_mean(tf.reduce_mean(Xtihw, 2), 2)
