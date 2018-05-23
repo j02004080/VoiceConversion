@@ -12,23 +12,7 @@ class speakerReg():
         def __init__(self, arch, name):
                 self.arch = arch
                 self.regnition = tf.make_template('regnition', self.regnition)
-                self.emb_trans = tf.make_template('emb_trans', self.emb_trans)
-                with tf.name_scope(name):
-                        self.speaker_emb = self.ini_emb(self.arch['speaker_dim'], name+'speaker_embedding')
 
-        def ini_emb(self, n_speaker, scope_name):
-                with tf.variable_scope(scope_name):
-                        embeddings_trans = tf.get_variable(
-                                name='y_emb',
-                                shape=[n_speaker, N, N])
-                return embeddings_trans
-
-        def emb_trans(self, x, label):
-                y = tf.argmax(label, axis=1)
-                trans_mat = tf.nn.embedding_lookup(self.speaker_emb, y)
-                trans = tf.matmul(x, trans_mat)
-                trans = tf.reshape(trans, [-1, 500])
-                return trans
 
         def regnition(self, input):
                 x = tf.reshape(input, [-1, 1, tstep*N, 1])
