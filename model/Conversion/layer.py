@@ -19,10 +19,11 @@ def prelu(x, name):
 def conv2d(x, c, k, s, activation, padding, name):
     with tf.variable_scope(name):
         x = tf.layers.conv2d(x, c, k, s,
+            activation = activation,
             padding = padding,
             name = name)
         x = tf.contrib.layers.layer_norm(x)
-        return activation(x, name)
+        return x
 
 def deconv2d(x, c, k, s, activation, name):
     with tf.variable_scope(name):

@@ -31,21 +31,40 @@ class WGAN():
                 f2 = 0.5 * (1 - leak)
                 return f1 * x + f2 * abs(x)
 
+        def gateActivation(self, x, channel, kernel, stride, label, name):
+
+            fx = layer.conv2d(x, channel, kernel, stride, activation=None, padding='SAME', name=name+'_gate-filter')
+            fx = tf.reshape(fx, [-1, channel])
+            fh = tf.layers.dense(label, channel, activation=None, bias_initializer=tf.constant_initializer(0.1))
+            gx = layer.conv2d(x, channel, kernel, stride, activation=None, padding='SAME', name=name+'_gate-gate')
+            gx = tf.reshape(gx, [-1, channel])
+            gh = tf.layers.dense(label, channel, activation=None, bias_initializer=tf.constant_initializer(0.1))
+            output = tf.multiply(tf.nn.tanh(fx+fh), tf.nn.sigmoid(gx+gh))
+
+            return output
+
+
         def generator(self, x, label):
                 net = self.arch['gen']
                 c = net['channel']
                 k = net['kernel']
                 s = net['stride']
                 h = net['hidNum']
-                y = tf.argmax(label, axis=1)
-                y = tf.nn.embedding_lookup(self.speaker_emb, y)
-                x = tf.layers.dense(x, h[0], activation=self.lrelu, bias_initializer=tf.constant_initializer(0.1))
-                x = tf.layers.dense(x, h[1], activation=self.lrelu, bias_initializer=tf.constant_initializer(0.1))
-                x = tf.reshape(x, [-1, tstep, hidNum])
-                x = tf.matmul(x, y)
-                x = tf.reshape(x, [-1, hidNum])
-                x = tf.layers.dense(x, h[2], activation=self.lrelu, bias_initializer=tf.constant_initializer(0.1))
-                output = tf.layers.dense(x, h[3], activation=tf.nn.tanh, bias_initializer=tf.constant_initializer(0.1))
+                # x = tf.reshape(x, [-1, tstep, N, 1])
+                label = tf.tile(tf.expand_dims(label, 1), [1, tstep, 1])
+                label = tf.reshape(label, [-1, 10])
+                for i in range(len(h)):
+                    x = tf.layers.dense(x, h[i], activation=tf.nn.relu, bias_initializer=tf.constant_initializer(0.1))
+                    if i == 1:
+                        fx = tf.layers.dense(x, h[i], activation=tf.nn.tanh, bias_initializer=tf.constant_initializer(0.1))
+                        fh = tf.layers.dense(label, h[i], activation=tf.nn.sigmoid, bias_initializer=tf.constant_initializer(0.1))
+
+                        gx = tf.layers.dense(x, h[i], activation=tf.nn.tanh,
+                                             bias_initializer=tf.constant_initializer(0.1))
+                        gh = tf.layers.dense(label, h[i], activation=tf.nn.sigmoid,
+                                             bias_initializer=tf.constant_initializer(0.1))
+                        x = tf.multiply(tf.nn.tanh(fx+fh), tf.nn.sigmoid(gx+gh))
+                output = x
                 return output
 
         def discriminator(self, input):
