@@ -96,22 +96,22 @@ if is_training:
             print('train log-probability: %f' %(np.mean(eva_logp)))
             print('KL: %f' %(np.mean(kl)))
 
-    # for i in range(20):
-    #         for j in range(2000):
-    #             src_batch, y_batch = nextbatch(trainData, batchSize)
-    #             latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
-    #             D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
-    #             for k in range(4):
-    #                 G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
-    #
-    #             x_batch, y_batch = nextbatch(trainData, batchSize)
-    #             VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
+    for i in range(20):
+            for j in range(2000):
+                src_batch, y_batch = nextbatch(trainData, batchSize)
+                latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
+                D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
+                for k in range(4):
+                    G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
 
-            # src_batch, y_batch = nextbatch(trainData, batchSize)
-            # loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
-            # print('epoch %d' %(i))
-            # print('discriminator loss: %f' % (loss_d))
-            # print('generative loss: %f' %(loss_g))
+                x_batch, y_batch = nextbatch(trainData, batchSize)
+                VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
+
+            src_batch, y_batch = nextbatch(trainData, batchSize)
+            loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
+            print('epoch %d' %(i))
+            print('discriminator loss: %f' % (loss_d))
+            print('generative loss: %f' %(loss_g))
 
     saver.save(sess, 'output/ckpt/model.ckpt')
 else:
