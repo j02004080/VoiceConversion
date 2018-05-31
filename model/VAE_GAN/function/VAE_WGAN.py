@@ -7,7 +7,8 @@ class ConvVAE_WGAN():
         self.arch = arch
         with tf.name_scope('SpeakerRepre'):
             self.speaker_emb = self.ini_emb(self.arch['speaker_dim'], self.arch['z_dim'], 'speaker_embedding')
-        
+        self.featureSize = self.arch['featureSize']
+        self.latentSize = self.arch['z_dim']
         self.discriminator = tf.make_template('discriminator', self.discriminator)
         self.encoder = tf.make_template('encoder', self.encoder)
         self.generator = tf.make_template('decoder', self.generator)
@@ -32,6 +33,7 @@ class ConvVAE_WGAN():
         return x
     
     def encoder(self, x):
+        x = tf.reshape(x, [-1, self.featureSize, 1, 1])
         unit = self.arch['encoder']
         c = unit['channel']
         k = unit['kernel']
@@ -48,15 +50,17 @@ class ConvVAE_WGAN():
         c = unit['channel']
         k = unit['kernel']
         s = unit['stride']
-        y = tf.nn.embedding_lookup(self.speaker_emb, y)
-        z_emb = self.merge([z, y], 19*64)
+        # y = tf.nn.embedding_lookup(self.speaker_emb, y)
+        z_emb = self.merge([z, y], 19*self.latentSize)
         x = z_emb
-        x = tf.reshape(x, [-1, 19, 1, 64])
+        x = tf.reshape(x, [-1, 19, 1, self.latentSize])
         for i in range(len(c)):
             x = deconv2d(x, c[i], k[i], s[i], prelu, name='generator-L{}'.format(i))
+        x = tf.reshape(x, [-1, self.featureSize])
         return x
 
     def discriminator(self, x):
+        x = tf.reshape(x, [-1, self.featureSize, 1, 1])
         unit = self.arch['discriminator']
         c = unit['channel']
         k = unit['kernel']
@@ -64,18 +68,20 @@ class ConvVAE_WGAN():
         for i in range(len(c)):
             x = conv2d(x, c[i], k[i], s[i], prelu, name='discriminator-L{}'.format(i))
         x = tf.layers.flatten(x)
-        y = tf.layers.dense(x, 1)
+        y = tf.layers.dense(x, 1, bias_initializer=tf.constant_initializer(0.1))
         return y
 
-    def loss(self, x, y, lamb = 0.01):
+    def loss(self, ori, trans, lamb = 0.01):
+        ori = tf.reshape(ori, [-1, self.featureSize])
+        trans = tf.reshape(trans, [-1, self.featureSize])
+        epsilon = tf.random_uniform(shape=[tf.shape(trans)[0], 1], minval=0, maxval=1)
+        interpolate = epsilon*trans + (1-epsilon)*ori
 
-        epsilon = tf.random_normal(tf.shape(1))
-        interpolate = epsilon*x + (1-epsilon)*y
         gradients = tf.gradients(self.discriminator(interpolate), [interpolate])[0]
         slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=1))
         gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2)
-        Lg = -tf.reduce_mean(self.discriminator(x))
-        Ld = -tf.reduce_mean(self.discriminator(y)) + tf.reduce_mean(self.discriminator(x)) + lamb*gradient_penalty
+        Lg = -tf.reduce_mean(self.discriminator(trans))
+        Ld = -tf.reduce_mean(self.discriminator(ori)) + tf.reduce_mean(self.discriminator(trans)) + lamb*gradient_penalty
         loss = dict()
         loss['Ld'] = Ld
         loss['Lg'] = Lg

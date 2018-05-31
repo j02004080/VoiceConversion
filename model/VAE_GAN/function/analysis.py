@@ -23,13 +23,7 @@ def loadData(path):
                 spec = np.fromstring(spec_string, dtype=np.float64)
                 length = int(example.features.feature['len'].int64_list.value[0])
                 spec = spec.reshape([length, 513])
-                ap_string = example.features.feature['ap'].bytes_list.value[0]
-                ap = np.fromstring(ap_string, dtype=np.float64)
-                Nf_string = example.features.feature['Nfactor'].bytes_list.value[0]
-                Nfactor = np.fromstring(Nf_string, dtype=np.float64)
-                f0_string = example.features.feature['f0'].bytes_list.value[0]
-                f0 = np.fromstring(f0_string, dtype=np.float64)
-                print(f0)
+                Data[speaker].append(spec)
     return Data
 
 def pickTransferInput(path, src, trg):
@@ -46,27 +40,21 @@ def pickTransferInput(path, src, trg):
         spec = np.fromstring(spec_string, dtype=np.float64)
         length = int(example.features.feature['len'].int64_list.value[0])
         srcData = spec.reshape([length, 513])
-    y = [speaker.index(trg)]
+    label = np.zeros([1, len(speaker)])
+    label[0, speaker.index(trg)] = 1
+    y = np.tile(label, [length, 1])
     return srcData, y, srcfile[ind]
 
-def nextbatch(path, batchSize):
-    speakerList = os.listdir(path)
-    speaker = random.choice(speakerList)
-    spath = path + speaker + '/'
-    filename = os.listdir(spath)
-    filename = random.choice(filename)
-    tfrecords_filename = path + speaker + '/' + filename
-    record_iterator = tf.python_io.tf_record_iterator(path=tfrecords_filename)
-    for string_record in record_iterator:
-        example = tf.train.Example()
-        example.ParseFromString(string_record)
-        spec_string = example.features.feature['spec'].bytes_list.value[0]
-        spec = np.fromstring(spec_string, dtype=np.float64)
-        length = int(example.features.feature['len'].int64_list.value[0])
-        spec = spec.reshape([length, 513])
-    ind = random.randint(0, len(spec)-batchSize)
-    src = spec[ind:ind+batchSize]
-    y = [speakerList.index(speaker)]
+def nextbatch(data, batchSize):
+    speaker = list(data.keys())
+    s = random.choice(speaker)
+    sind = speaker.index(s)
+    dat = random.choice(data[s])
+    i = random.choice(range(dat.shape[0] - batchSize))
+    src = dat[i:i+batchSize, :]
+    label = np.zeros([1, len(speaker)])
+    label[0, sind] = 1
+    y = np.tile(label, [batchSize, 1])
     return src, y
   
 def sythesis(path, src, trg, sp, filename):
