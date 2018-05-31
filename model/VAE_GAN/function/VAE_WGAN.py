@@ -19,18 +19,6 @@ class ConvVAE_WGAN():
                 name = 'y_emb',
                 shape = [n_speaker, z_dim])
         return embeddings
-
-    def merge(self, var_list, op_unit, l2_reg=1e-6):
-        x = 0.
-        with tf.contrib.slim.arg_scope([tf.contrib.slim.fully_connected],
-                                       num_outputs = op_unit,
-                                       weights_regularizer = tf.contrib.slim.l2_regularizer(l2_reg),
-                                       normalizer_fn = None,
-                                       activation_fn = None):
-            for var in var_list:
-                x = x + tf.contrib.slim.fully_connected(var)
-            tf.contrib.slim.bias_add(x)
-        return x
     
     def encoder(self, x):
         x = tf.reshape(x, [-1, self.featureSize, 1, 1])
@@ -51,7 +39,9 @@ class ConvVAE_WGAN():
         k = unit['kernel']
         s = unit['stride']
         # y = tf.nn.embedding_lookup(self.speaker_emb, y)
-        z_emb = self.merge([z, y], 19*self.latentSize)
+        x = tf.layers.dense(z, 19*self.latentSize, activation=None, bias_initializer=tf.constant_initializer(0.1))
+        h = tf.layers.dense(y, 19*self.latentSize, activation=None, bias_initializer=tf.constant_initializer(0.1))
+        z_emb = x + h
         x = z_emb
         x = tf.reshape(x, [-1, 19, 1, self.latentSize])
         for i in range(len(c)):

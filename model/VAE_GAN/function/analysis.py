@@ -75,7 +75,7 @@ def sythesis(path, src, trg, sp, filename):
     fs = 16000
     f0_c = convert_f0(path, src, trg, filename)
     y = pw.synthesize(f0_c, sp, ap, fs)
-    opname = src + '_To_' + trg + '_' + filename[0:len(filename)-4] + '.wav'
+    opname = src + '_To_' + trg + '_' + filename + '.wav'
     sio.savemat(opname, mdict={'y': y})
     return sp, ap, f0_c
     

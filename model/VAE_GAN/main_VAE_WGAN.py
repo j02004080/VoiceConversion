@@ -64,15 +64,16 @@ batchSize = 128
 loss_GAN = model.loss(source, transfer)
 Ld = loss_GAN['Ld']
 Lg = loss_GAN['Lg']
-MAE = tf.losses.absolute_difference(source, recon_x)
-KL = -0.5*tf.reduce_sum((1 + z_var - tf.square(z_mean) - tf.exp(z_var)), 1)
+MAE = tf.nn.l2_loss(source-recon_x)
+KL = -0.5*tf.reduce_mean((1 + z_var - tf.square(z_mean) - tf.exp(z_var)), 1)
 
 trainables = tf.trainable_variables()
 g_vars = [v for v in trainables if 'generator' in v.name]
 d_vars = [v for v in trainables if 'discriminator' in v.name]
 
-loss = tf.reduce_mean(KL+MAE)
-VAE_train = tf.train.AdamOptimizer(0.00001).minimize(loss)
+loss = tf.reduce_mean(KL)
+VAE_train = tf.train.AdamOptimizer(0.0001).minimize(MAE)
+KL_train = tf.train.AdamOptimizer(0.00001).minimize(KL)
 G_train = tf.train.AdamOptimizer(0.0001).minimize(Lg, var_list = g_vars)
 D_train = tf.train.AdamOptimizer(0.0001).minimize(Ld, var_list = d_vars)
 
@@ -81,35 +82,36 @@ tf.global_variables_initializer().run()
 tS = time.time()
 saver = tf.train.Saver()
 
-is_training = True
+is_training = False
 
 if is_training:
     for i in range(10):
             for j in range(2000):
                     x_batch, y_batch = nextbatch(trainData, batchSize)
                     VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
+                    KL_train.run(feed_dict={source: x_batch, y: y_batch})
             x_Evabatch, y_Evabatch = nextbatch(testData, batchSize)
             eva_logp, kl= sess.run([MAE , KL], feed_dict={source: x_Evabatch, y: y_Evabatch})
             print('epoch %d' %(i))
             print('train log-probability: %f' %(np.mean(eva_logp)))
             print('KL: %f' %(np.mean(kl)))
 
-    for i in range(20):
-            for j in range(2000):
-                src_batch, y_batch = nextbatch(trainData, batchSize)
-                latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
-                D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
-                for k in range(4):
-                    G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
+    # for i in range(20):
+    #         for j in range(2000):
+    #             src_batch, y_batch = nextbatch(trainData, batchSize)
+    #             latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
+    #             D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
+    #             for k in range(4):
+    #                 G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
+    #
+    #             x_batch, y_batch = nextbatch(trainData, batchSize)
+    #             VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
 
-                x_batch, y_batch = nextbatch(trainData, batchSize)
-                VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
-
-            src_batch, y_batch = nextbatch(trainData, batchSize)
-            loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
-            print('epoch %d' %(i))
-            print('discriminator loss: %f' % (loss_d))
-            print('generative loss: %f' %(loss_g))
+            # src_batch, y_batch = nextbatch(trainData, batchSize)
+            # loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
+            # print('epoch %d' %(i))
+            # print('discriminator loss: %f' % (loss_d))
+            # print('generative loss: %f' %(loss_g))
 
     saver.save(sess, 'output/ckpt/model.ckpt')
 else:
@@ -117,11 +119,10 @@ else:
     print('Model restored.')
 
 src = 'SF1'
-trg = 'SF1'
+trg = 'SM1'
 srcData, trgLabel, filename = pickTransferInput(TestDataPath, src, trg)
-sp, speaker_emb = sess.run([recon_x, model.speaker_emb], feed_dict={source: srcData, y: trgLabel})
+sp = sess.run(recon_x, feed_dict={source: srcData, y: trgLabel})
 sp = np.reshape(sp, [sp.shape[0], 513])
 sythesis(TestDataPath, src, trg, sp, filename)
-sio.savemat('speaker_emb', mdict={'speaker_emb': speaker_emb})
 tE = time.time()
 print("Training time: %f sec" % (tE-tS))
