@@ -16,19 +16,18 @@ def prelu(x, name):
     neg = alpha*(x-abs(x))*0.5
     return pos + neg
 
-def conv2d(x, c, k, s, activation, padding, name):
+def conv2d(x, c, k, s, activation, name):
     with tf.variable_scope(name):
         x = tf.layers.conv2d(x, c, k, s,
-            activation = activation,
-            padding = padding,
+            padding = 'same',
             name = name)
         x = tf.contrib.layers.layer_norm(x)
-        return x
+        return activation(x, name)
 
 def deconv2d(x, c, k, s, activation, name):
     with tf.variable_scope(name):
         x = tf.layers.conv2d_transpose(x, c, k, s,
-            padding = 'valid',
+            padding = 'same',
             name = name)
         x = tf.contrib.layers.layer_norm(x)
         return activation(x, name)
@@ -38,8 +37,8 @@ def gatedCNN(input, arch, name):
     k = arch['kernel']
     s = arch['stride']
     with tf.variable_scope(name):
-        A = conv2d(input, c, k, s, tf.nn.relu, 'VALID', 'reluConv')
-        B = conv2d(input, c, k, s, tf.sigmoid, 'VALID', 'sigmoidConv')
+        A = tf.layers.conv2d(input, c, k, s, activation=tf.nn.relu, padding = 'valid', name = 'reluConv')
+        B = tf.layers.conv2d(input, c, k, s, activation=tf.nn.sigmoid, padding = 'valid', name = 'sigmoidConv')
         output = tf.multiply(A, B)
         return output
 

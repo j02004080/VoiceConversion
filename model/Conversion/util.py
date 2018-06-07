@@ -14,53 +14,44 @@ def loadTF(tfrecords_filename):
         signal = np.fromstring(signal_string, dtype=np.float64)
         return signal
 
-def loadData(path, L, tstep):
-    Data = {}
-    speaker = os.listdir(path)
-    lab_num = []
-    for s in speaker[0:5]:
-        spath = path+s+'/'
-        filename = os.listdir(spath)
-        tfrecords_filename = path + s + '/' + filename[0]
-        signal = loadTF(tfrecords_filename)
-        # mat = sio.loadmat(spath + filename[0])
-        # mat = mat['value']
-        length = L*tstep
-        tmp = np.reshape(signal[0: length*(signal.shape[0] // length)], [-1, length])
-        Sind = np.zeros([1, 10], dtype=np.int8)
-        Sind[0, speaker.index(s)] = 1
+def nextbatch(path, segmentLength, batchSize):
+    speakerFolder = os.listdir(path)
 
-        if 'Label' in locals():
-            Label = np.concatenate((Label, np.tile(Sind, [tmp.shape[0], 1])), axis=0)
-            Data = np.concatenate((Data, tmp), axis=0)
-        else:
-            Label = np.tile(Sind, [tmp.shape[0], 1])
-            Data = tmp
+    label_batch = np.zeros([1, len(speakerFolder)])
+    x_batch = np.zeros([1, segmentLength])
 
-        for name in filename[1:len(filename)]:
-            tfrecords_filename = path + s + '/' + name
-            signal = loadTF(tfrecords_filename)
-            tmp = np.reshape(signal[0:length * (signal.shape[0] // length)], [-1, length])
-            Label = np.concatenate((Label,np.tile(Sind, [tmp.shape[0], 1])), axis=0)
-            Data = np.concatenate((Data, tmp), axis=0)
-    return Data, Label
+    while(x_batch.shape[0] <= batchSize + 1):
 
-def pickTransferInput(path, src, trg, length):
-    speaker = os.listdir(path)
-    Sind = np.zeros([1, 10], dtype=np.int8)
-    Sind[0, speaker.index(trg)] = 1
+        speaker = random.choice(speakerFolder)
+        speakerLabel = np.zeros([1, len(speakerFolder)])
+        speakerLabel[0, speakerFolder.index(speaker)] = 1
 
-    srcPath = path+src+'/'
-    srcfile = os.listdir(srcPath)
-    ind = random.randint(0, len(srcfile) - 1)
-    tfrecords_filename = srcPath+srcfile[ind]
-    signal = loadTF(tfrecords_filename)
-    tmp = np.reshape(signal[0:length * (signal.shape[0] // length)], [-1, length])
-    Label = np.tile(Sind, [tmp.shape[0], 1])
-    return tmp, Label, srcfile[ind]
+        Folderpath = path + speaker + '/'
+        speakerFile = os.listdir(Folderpath)
+        file = random.choice(speakerFile)
+        raw = loadTF(Folderpath + file)
+        length = len(raw)
+        segment = raw[0: segmentLength * (length // segmentLength)]
+        segment = segment.reshape([length // segmentLength, segmentLength])
+        speakerLabel = np.tile(speakerLabel, [(length // segmentLength), 1])
+        x_batch = np.concatenate((x_batch, segment), axis = 0)
+        label_batch = np.concatenate((label_batch, speakerLabel), axis = 0)
 
-def nextbatch(data, Label, batch):
-    ind = random.sample(range(data.shape[0]), batch)
-    srcData = data[ind, :]
-    l = Label[ind, :]
-    return srcData, l
+    return x_batch[1:batchSize+1, :], label_batch[1:batchSize+1, :]
+
+def pickOne(path, src, trg, segmentLength):
+
+    speakerFolder = os.listdir(path)
+    trg_label = np.zeros([1, len(speakerFolder)])
+    trg_label[0, speakerFolder.index(trg)] = 1
+
+    Folderpath = path + src + '/'
+    speakerFile = os.listdir(Folderpath)
+    file = random.choice(speakerFile)
+    raw = loadTF( Folderpath + file)
+    length = len(raw)
+    segment = raw[0: segmentLength * (length // segmentLength)]
+    segment = segment.reshape([length // segmentLength, segmentLength])
+    trg_label = np.tile(trg_label, [(length // segmentLength), 1])
+
+    return segment, trg_label, file
