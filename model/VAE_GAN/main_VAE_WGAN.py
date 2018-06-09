@@ -17,8 +17,8 @@ lam = 0
 # ## Load data
 
 tS = time.time()
-trainData = loadData(TrainDataPath)
-testData = loadData(TestDataPath)
+# trainData = loadData(TrainDataPath)
+# testData = loadData(TestDataPath)
 tE = time.time()
 print("loading data time: %f" % (tE-tS))
 
@@ -61,9 +61,7 @@ transfer = model.generator(z_in, y)
 
 batchSize = 128
 
-loss_GAN = model.loss(source, transfer)
-Ld = loss_GAN['Ld']
-Lg = loss_GAN['Lg']
+Ld, Lg = model.loss(source, transfer)
 MAE = tf.nn.l2_loss(source-recon_x)
 KL = -0.5*tf.reduce_mean((1 + z_var - tf.square(z_mean) - tf.exp(z_var)), 1)
 
@@ -82,7 +80,7 @@ tf.global_variables_initializer().run()
 tS = time.time()
 saver = tf.train.Saver()
 
-is_training = False
+is_training = True
 
 if is_training:
     for i in range(10):
@@ -96,24 +94,28 @@ if is_training:
             print('train log-probability: %f' %(np.mean(eva_logp)))
             print('KL: %f' %(np.mean(kl)))
 
-    for i in range(20):
-            for j in range(2000):
-                src_batch, y_batch = nextbatch(trainData, batchSize)
-                latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
-                D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
-                for k in range(4):
-                    G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
+    # for i in range(10):
+    #         for j in range(2000):
+    #             src_batch, y_batch = nextbatch(trainData, batchSize)
+    #             latent = sess.run(z, feed_dict={source: src_batch, y: y_batch})
+    #             D_train.run(feed_dict={source: src_batch, z_in: latent, y: y_batch})
+    #             for k in range(4):
+    #                 G_train.run(feed_dict = {source: src_batch, z_in: latent, y: y_batch})
+    #
+    #         # for k in range(50):
+    #         #     x_batch, y_batch = nextbatch(trainData, batchSize)
+    #         #     VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
+    #         #     KL_train.run(feed_dict={source: x_batch, y: y_batch})
+    #
+    #         src_batch, y_batch =nextbatch(trainData, batchSize)
+    #         loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
+    #         print('epoch %d' %(i))
+    #         print('discriminator loss: %f' % (loss_d))
+    #         print('generative loss: %f' %(loss_g))
 
-                x_batch, y_batch = nextbatch(trainData, batchSize)
-                VAE_train.run(feed_dict = {source: x_batch , y: y_batch})
 
-            src_batch, y_batch = nextbatch(trainData, batchSize)
-            loss_d, loss_g = sess.run([Ld, Lg], feed_dict={source: src_batch, z_in: latent, y: y_batch})
-            print('epoch %d' %(i))
-            print('discriminator loss: %f' % (loss_d))
-            print('generative loss: %f' %(loss_g))
 
-    saver.save(sess, 'output/ckpt/model.ckpt')
+    saver.save(sess, 'output/ckpt/VAE_model_2.ckpt')
 else:
     saver.restore(sess, tf.train.latest_checkpoint('output/ckpt/'))
     print('Model restored.')

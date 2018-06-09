@@ -8,7 +8,7 @@ import layer
 TrainDataPath = '../../vcc2016/TFrecords/raw/Train/'
 TestDataPath = '../../vcc2016/TFrecords/raw/Test/'
 
-latentSize = 128
+latentSize = 32
 NumOfspeaker = 10
 N = 500
 length = 80
@@ -88,7 +88,7 @@ lstm_cell_1 = tf.contrib.rnn.BasicLSTMCell(N, forget_bias=1.0)
 with tf.variable_scope('lstm_cell_1'):
     lstm_out, _ = tf.nn.dynamic_rnn(lstm_cell_1, gatedCNN_op1_flat, dtype=tf.float32)
 
-Basis = tf.get_variable('Basis', shape=[N, length], initializer=tf.random_normal_initializer(stddev=0.01))
+Basis = tf.get_variable('Basis', shape=[N, length], initializer=tf.orthogonal_initializer)
 
 Mask = tf.reshape(lstm_out, [-1, N])
 
@@ -98,13 +98,20 @@ std_var = tf.exp(0.5*z_var)
 z = z_mu + tf.multiply(std_var, epsilon)
 Weight, z_emb, sp_emb = decoder(z, label)
 
-recover = tf.matmul(tf.multiply(Weight,Mask), Basis)
+recover = tf.matmul(tf.multiply(tf.reshape(gatedCNN_op1_flat, [-1, N]),Mask), Basis)
 recover = tf.reshape(recover, [-1, segmentLength])
 
-loss=tf.nn.l2_loss(source-recover)
+transfer = tf.matmul(tf.multiply(Weight,Mask), Basis)
+transfer = tf.reshape(transfer, [-1, segmentLength])
+
+recover_loss = tf.nn.l2_loss(source-recover)
+transfer_loss = tf.nn.l2_loss(source-transfer)
+
 KL = -0.5*tf.reduce_mean((1 + z_var - tf.square(z_mu) - tf.exp(z_var)), 1)
 
-train_loss = tf.train.AdamOptimizer(0.0003).minimize(loss)
+
+train_re_loss = tf.train.AdamOptimizer(0.0001).minimize(recover_loss)
+train_trans_loss = tf.train.AdamOptimizer(0.0003).minimize(transfer_loss)
 train_KL = tf.train.AdamOptimizer(0.00001).minimize(KL)
 
 
@@ -121,9 +128,10 @@ if is_training:
         for epoch in range(10):
                 for iter in range(100):
                         x_batch,label_batch  = nextbatch(TrainDataPath, segmentLength, batchSize)
-                        train_loss.run(feed_dict = {source: x_batch, label: label_batch})
+                        train_re_loss.run(feed_dict = {source: x_batch, label: label_batch})
+                        train_trans_loss.run(feed_dict = {source: x_batch, label: label_batch})
                         train_KL.run(feed_dict={source: x_batch, label: label_batch})
-                loss_value, loss_KL = sess.run([loss, KL], feed_dict = {source: x_batch, label: label_batch})
+                loss_value, loss_KL = sess.run([recover_loss, KL], feed_dict = {source: x_batch, label: label_batch})
                 print('epoch: %d' % (epoch))
                 print('l2_loss: %f' % (loss_value))
 
@@ -132,14 +140,19 @@ else:
         saver.restore(sess, tf.train.latest_checkpoint('ckpt/'))
         print('Model restored.')
 
-voice, trg_label, filename = pickOne(TestDataPath, 'SF1', 'SM1', segmentLength)
+src = 'SF1'
+trg = 'SM1'
 
-emb, s_emb = sess.run([z_emb, sp_emb], feed_dict={source: voice, label: trg_label})
-scipy.io.savemat(filename+'.mat', mdict={'latent': emb, 'speaker_emb': s_emb})
+voice, trg_label, filename = pickOne(TestDataPath, src, trg, segmentLength)
 
-output = sess.run(recover, feed_dict={source: voice, label: trg_label})
-output = output.reshape([-1])
-scipy.io.wavfile.write(filename + '.wav', sampleRate, output)
+Weight_ori, Weight_trans, b, m = sess.run([gatedCNN_op1_flat, Weight, Basis, Mask], feed_dict={source: voice, label: trg_label})
+scipy.io.savemat(filename + '.mat', mdict={'Weight_ori': Weight_ori, 'Weight_trans': Weight_trans, 'Basis': b, 'Mask': m})
+
+recover_voice, transfer_voice = sess.run([recover, transfer], feed_dict={source: voice, label: trg_label})
+recover_voice = recover_voice.reshape([-1])
+transfer_voice = transfer_voice.reshape([-1])
+scipy.io.wavfile.write(filename + '_recover.wav', sampleRate, recover_voice)
+scipy.io.wavfile.write(filename + '_transfer.wav', sampleRate, transfer_voice)
 
 
 tE = time.time()

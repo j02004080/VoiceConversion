@@ -47,7 +47,7 @@ class ConvVAE_WGAN():
         for i in range(len(c)):
             x = deconv2d(x, c[i], k[i], s[i], prelu, name='generator-L{}'.format(i))
         x = tf.reshape(x, [-1, self.featureSize])
-        return x
+        return x, h
 
     def discriminator(self, x):
         x = tf.reshape(x, [-1, self.featureSize, 1, 1])
@@ -72,10 +72,8 @@ class ConvVAE_WGAN():
         gradient_penalty = tf.reduce_mean((slopes - 1.) ** 2)
         Lg = -tf.reduce_mean(self.discriminator(trans))
         Ld = -tf.reduce_mean(self.discriminator(ori)) + tf.reduce_mean(self.discriminator(trans)) + lamb*gradient_penalty
-        loss = dict()
-        loss['Ld'] = Ld
-        loss['Lg'] = Lg
-        return loss
+
+        return Ld, Lg
         
         
         

@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.io as sio
+import scipy.io.wavfile
 import os
 import random
 import tensorflow as tf
@@ -75,6 +76,7 @@ def sythesis(path, src, trg, sp, filename):
     fs = 16000
     f0_c = convert_f0(path, src, trg, filename)
     y = pw.synthesize(f0_c, sp, ap, fs)
+    y = y.reshape([-1])
     opname = src + '_To_' + trg + '_' + filename + '.wav'
     sio.savemat(opname, mdict={'y': y})
     return sp, ap, f0_c

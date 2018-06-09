@@ -22,7 +22,7 @@ def conv2d(x, c, k, s, activation, name):
             padding = 'same',
             name = name)
         x = tf.contrib.layers.layer_norm(x)
-        return activation(x, name)
+        return activation(x, name = name)
 
 def deconv2d(x, c, k, s, activation, name):
     with tf.variable_scope(name):
@@ -30,7 +30,7 @@ def deconv2d(x, c, k, s, activation, name):
             padding = 'same',
             name = name)
         x = tf.contrib.layers.layer_norm(x)
-        return activation(x, name)
+        return activation(x, name = name)
 
 def gatedCNN(input, arch, name):
     c = arch['channel']

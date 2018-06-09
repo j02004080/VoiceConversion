@@ -1,81 +1,75 @@
 import tensorflow as tf
-import numpy as np
+from util import (nextbatch, pickOne, synthesis)
+from model_VAE import VAE
 import time
-import math
-from function.analysis import (loadData, pickTransferInput, sythesis, nextbatch)
-from function.ConvVAE import ConvVAE
+import numpy as np
 
+featureSize = 513
+NumOfspeaker = 10
 
-TrainDataPath = '../../vcc2016/TFrecords//spec_norm//Train/'
-TestDataPath = '../../vcc2016/TFrecords//spec_norm//Test/'
+TrainDataPath = '../../vcc2016/TFrecords/spec_norm/Train/'
+TestDataPath = '../../vcc2016/TFrecords/spec_norm/Test/'
 
-dataSize = 513
-latentSize = 64
-speakerN = 10
-lam = 0
-
-# Load data
-# tS = time.time()
-# trainData = loadData(TrainDataPath)
-# testData = loadData(TestDataPath)
-# tE = time.time()
-# print("loading data time: %f" % (tE-tS))
+source = tf.placeholder(tf.float32, shape = [None, featureSize])
+label = tf.placeholder(tf.float32, shape = [None, NumOfspeaker])
 
 arch = {
-        'z_dim': 256,
-        'speaker_dim': 10,
-        'encoder':
-        {'channel': [16, 32, 64],
-         'kernel' : [[7, 1], [7, 1], [7, 1]],
-         'stride' : [[3, 1], [3, 1], [3, 1]]
-         },
-        'decoder':
-        {'channel': [32, 16, 1],
-         'kernel' : [[7, 1], [7, 1], [7, 1]],
-         'stride' : [[3, 1], [3, 1], [3, 1]]
-         }
-        }
-source = tf.placeholder(tf.float32, shape = [None, dataSize])
-y = tf.placeholder(tf.int32, shape = [None,])
-VAE = ConvVAE(arch)
+    'featureSize': featureSize,
+    'z_dim': 128,
+    'encoder': {
+        'channel': [16, 32, 64],
+        'kernel': [[7, 1], [7, 1], [7, 1]],
+        'stride': [[3, 1], [3, 1], [3, 1]]
+    },
+    'decoder':{
+        'hc': [19, 64],
+        'channel': [32, 16, 1],
+        'kernel': [[7, 1], [7, 1], [7, 1]],
+        'stride': [[3, 1], [3, 1], [3, 1]]
+    }
+}
 
-x = tf.reshape(source, shape=[-1, dataSize, 1, 1])
-z_mean, z_var = VAE.encoder(x)
-epsilon = tf.random_normal(tf.shape(z_var))
-std_var = tf.exp(0.5*z_var)
-z = z_mean + tf.multiply(std_var, epsilon)
-x_mu, x_var = VAE.decoder(z, y)
-epsilon = tf.random_normal(tf.shape(x_var))
-std_var = tf.exp(0.5*x_var)
-recon_x = x_mu + tf.multiply(std_var, epsilon)
-#### setting
+model = VAE(arch)
+z_mu, z_logvar = model.encoder(source)
+eps = tf.random_normal(tf.shape(z_logvar), dtype= tf.float32, mean = 0., stddev = 1.0, name = 'epsilon')
+z = z_mu + eps*tf.exp(0.5*z_logvar)
+recover = model.decoder(z, label)
 
-batchSize = 128
+loss_MS = tf.nn.l2_loss(source-recover)
+loss_KL = -0.5*tf.reduce_sum(1 + z_logvar - tf.square(z_mu) - tf.exp(z_logvar), reduction_indices=1)
 
-logp = 0.5*tf.reduce_mean(tf.log(math.pi) + x_var + tf.divide(tf.pow((recon_x-x_mu), 2), tf.exp(x_var)))
-KL = -0.5*tf.reduce_mean((1 + z_var - tf.square(z_mean) - tf.exp(z_var)), 1)
-loss = tf.reduce_mean(KL+logp)
-train_step = tf.train.AdamOptimizer(0.0001).minimize(loss)
+train_MS = tf.train.AdamOptimizer(0.0001).minimize(loss_MS)
+train_KL = tf.train.AdamOptimizer(0.00001).minimize(loss_KL)
 
 sess = tf.InteractiveSession()
 tf.global_variables_initializer().run()
+saver = tf.train.Saver()
+time_start = time.time()
+batchSize = 128
+is_training = True
 
-for i in range(20):
-        for j in range(2000):
-                x_batch, y_batch = nextbatch(TrainDataPath, batchSize)
-                train_step.run(feed_dict = {source: x_batch , y: y_batch})
-                x_batch, y_batch = nextbatch(TestDataPath, batchSize)
-                train_step.run(feed_dict={source: x_batch, y: y_batch})
-        x_Evabatch, y_Evabatch = nextbatch(TestDataPath, batchSize)
-        eva_logp, kl= sess.run([logp , KL], feed_dict={source: x_Evabatch, y: y_Evabatch})
-        print('epoch %d' %(i))
-        print('train log-probability: %f' %(np.mean(eva_logp)))
-        print('KL: %f' %(np.mean(kl)))
+if is_training:
+    for epoch in range(5):
+        for iter in range(2000):
+            src_batch, label_batch = nextbatch(TrainDataPath, featureSize, batchSize)
+            train_MS.run(feed_dict={source: src_batch, label: label_batch})
+            train_KL.run(feed_dict={source: src_batch, label: label_batch})
+
+        ms_value, kl_value = sess.run([loss_MS, loss_KL], feed_dict={source: src_batch, label: label_batch})
+        print('epoch: %d' % (epoch))
+        print('MSE: %f' % (ms_value))
+        print('KL: %f' % (np.mean(kl_value)))
+    saver.save(sess, 'ckpt/VAE_model.ckpt')
+else:
+    saver.restore(sess, tf.train.latest_checkpoint('ckpt/'))
+    print('Model restored.')
+
+time_end = time.time()
+print('Training time: %f sec' % (time_end - time_start))
 
 src = 'SF1'
-trg = 'TM3'
-srcData, trgLabel, filename = pickTransferInput(TestDataPath, src, trg)
-sp = sess.run(recon_x, feed_dict={source: srcData, y: trgLabel})
-sp = np.reshape(sp, [-1, 513])
-sythesis(TestDataPath, src, trg, sp, filename)
+trg = 'SM1'
+src_spec, trg_label, filename = pickOne(TestDataPath, src, trg)
+output = sess.run(recover, feed_dict={source: src_spec, label: trg_label})
+synthesis(TestDataPath, src, trg, output, filename)
 

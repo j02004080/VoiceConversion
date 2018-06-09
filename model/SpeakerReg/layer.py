@@ -19,7 +19,7 @@ def prelu(x, name):
 def conv2d(x, c, k, s, activation, name):
     with tf.variable_scope(name):
         x = tf.layers.conv2d(x, c, k, s,
-            padding = 'SAME',
+            padding = 'same',
             name = name)
         x = tf.contrib.layers.layer_norm(x)
         return activation(x, name)
@@ -37,8 +37,8 @@ def gatedCNN(input, arch, name):
     k = arch['kernel']
     s = arch['stride']
     with tf.variable_scope(name):
-        A = conv2d(input, c, k, s, tf.nn.relu, 'reluConv')
-        B = conv2d(input, c, k, s, tf.sigmoid, 'sigmoidConv')
+        A = tf.layers.conv2d(input, c, k, s, activation=tf.nn.relu, padding = 'valid', name = 'reluConv')
+        B = tf.layers.conv2d(input, c, k, s, activation=tf.nn.sigmoid, padding = 'valid', name = 'sigmoidConv')
         output = tf.multiply(A, B)
         return output
 
